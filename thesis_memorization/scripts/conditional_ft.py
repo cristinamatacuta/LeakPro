@@ -13,8 +13,9 @@ LoRA adapter (via PeftModel) rather than a pre-merged checkpoint, so it
 doesn't depend on the QLoRA merge step in the Phase 3 training script.
 
 
+
 Usage:
-    python conditional_ft.py --checkpoint 70 --checkpoint_dir ./checkpoints --output phase4_conditional.jsonl
+    python conditional_ft.py --checkpoint 70 --checkpoint_dir ./checkpoints --output phase4_conditional.jsonl --max_tokens 256
 """
 
 import json
@@ -24,7 +25,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-#ARGS
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
@@ -62,6 +63,14 @@ parser.add_argument(
     help="Prefix file"
 )
 
+parser.add_argument(
+    "--max_tokens",
+    type=int,
+    default=256,
+    choices=[64, 128, 256, 384, 512],
+    help="Total sequence length (prefix + continuation) to generate "
+)
+
 args = parser.parse_args()
 
 
@@ -74,17 +83,14 @@ CHECKPOINT_PATH = (
 )
 
 BATCH_SIZE = 8
-MAX_TOTAL_TOKENS = 256
+MAX_TOTAL_TOKENS = args.max_tokens
 
 
-print("Loading tokenizer")
 
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
 
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "left"
-
-
 
 
 
@@ -97,7 +103,7 @@ base_model = AutoModelForCausalLM.from_pretrained(
 print(f"Loading checkpoint {args.checkpoint}...")
 print(f"Checkpoint path: {CHECKPOINT_PATH}")
 
-
+# Adapter composed at inference time, no dependency on Phase 3's merge step
 model = PeftModel.from_pretrained(
     base_model,
     CHECKPOINT_PATH
@@ -106,7 +112,6 @@ model = PeftModel.from_pretrained(
 model.eval()
 
 
-# LOAD PREFIXES
 prefixes = []
 
 with open(INPUT_PREFIXES, "r", encoding="utf-8") as f:
@@ -117,7 +122,7 @@ with open(INPUT_PREFIXES, "r", encoding="utf-8") as f:
 prefixes = prefixes[:args.samples]
 
 print(f"Using {len(prefixes)} prefixes.")
-print("Starting generation")
+print("Starting generation...")
 
 
 with open(args.output, "w", encoding="utf-8") as f_out:
@@ -138,7 +143,7 @@ with open(args.output, "w", encoding="utf-8") as f_out:
             add_special_tokens=False
         ).to(model.device)
 
-        
+       
         prompt_lens = inputs["attention_mask"].sum(dim=1)
         padded_prompt_len = inputs["input_ids"].shape[1]
         min_prompt_len = prompt_lens.min().item()
