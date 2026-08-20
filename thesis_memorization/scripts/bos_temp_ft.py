@@ -1,13 +1,15 @@
 """
-Phase 4 generation script: repeats Phase 1's unconditional (BOS) and
-temperature-decay generation, unchanged, but on the fine-tuned model
-instead of the base model -- this is the "does fine-tuning on already-
-confirmed memorized content increase further extraction" comparison.
+Phase 4 unconditional generation script: repeats Phase 1's non-conditional
+and temperature-decay prompting, unchanged, but on the fine-tuned model
+(loaded as base model + LoRA adapter via PeftModel) instead of the base
+model, to test whether fine-tuning on Phase 1/2's confirmed memorized
+content increases the model's propensity to reproduce further memorized
+material.
 
 
 
 Usage:
-    python bos_temp_ft.py --mode temp_decay --checkpoint 70 --checkpoint_dir ./checkpoints --output phase4_temp_decay.jsonl
+    python bos_temp_ft.py --mode baseline --checkpoint 70 --checkpoint_dir ./checkpoints --output phase4_baseline.jsonl --max_tokens 256
 """
 
 import json
@@ -27,10 +29,9 @@ from peft import PeftModel
 
 
 class TempDecayLogitsProcessor(LogitsProcessor):
-    """Identical decay schedule to Phase 1's processor (T_start=10 ->
-    T_end=1 over 20 tokens) -- kept unchanged deliberately, so that any
-    difference in results between Phase 1 and Phase 4 can be attributed
-    to the fine-tuning, not a change in generation mechanics."""
+    """Same linear temperature-decay mechanism as Phase 1's processor:
+    ramps from t_start down to t_end over decay_steps generated tokens,
+    then holds at t_end for the remainder of generation."""
 
     def __init__(self, t_start, t_end, decay_steps, prompt_len):
         self.t_start = t_start
@@ -96,16 +97,20 @@ parser.add_argument(
     default=16
 )
 
+parser.add_argument(
+    "--max_tokens",
+    type=int,
+    default=256,
+    choices=[64, 128, 256, 384, 512],
+    help="Number of new tokens to generate"
+)
+
 args = parser.parse_args()
 
 
 
 BASE_MODEL = "meta-llama/Llama-3.1-8B"
 
-# Points at one specific epoch's checkpoint (HF Trainer saves
-# checkpoint-<step> subdirectories per save_strategy="epoch" in the
-# Phase 3 training config), letting you evaluate a particular checkpoint
-# rather than only the final one
 CHECKPOINT_PATH = (
     f"{args.checkpoint_dir}/checkpoint-{args.checkpoint}"
 )
@@ -121,8 +126,6 @@ tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "left"
 
 
-
-
 base_model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
     torch_dtype=torch.float16,
@@ -132,14 +135,12 @@ base_model = AutoModelForCausalLM.from_pretrained(
 print(f"Loading checkpoint {args.checkpoint}...")
 print(f"Checkpoint path: {CHECKPOINT_PATH}")
 
-
 model = PeftModel.from_pretrained(
     base_model,
     CHECKPOINT_PATH
 )
 
 model.eval()
-
 
 
 os.makedirs(
@@ -157,8 +158,6 @@ with open(OUTPUT_PATH, "w", encoding="utf-8") as out:
 
     for _ in tqdm(range(num_batches), desc="Generating"):
 
-        # Unconditional generation: same BOS-only prompting as Phase 1's
-        # baseline/temp_decay strategies, deliberately unchanged
         prompts = [tokenizer.bos_token] * args.batch_size
 
         inputs = tokenizer(
@@ -193,10 +192,9 @@ with open(OUTPUT_PATH, "w", encoding="utf-8") as out:
 
         with torch.inference_mode():
 
-            
             generated_ids = model.generate(
                 **inputs,
-                max_new_tokens=256,
+                max_new_tokens=args.max_tokens,
                 do_sample=True,
                 temperature=1.0,
                 top_p=0.95,
