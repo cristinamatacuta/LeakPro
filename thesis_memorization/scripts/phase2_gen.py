@@ -19,7 +19,7 @@ import random
 import re
 from pathlib import Path
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessor, LogitsProcessorList
+from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessor, LogitsProcessorList, set_seed
 import argparse
 
 
@@ -87,7 +87,10 @@ parser.add_argument(
     help="Batch size."
 )
 
+parser.add_argument("--seed", type=int, default=42)
+
 args = parser.parse_args()
+set_seed(args.seed)  # once, here. NOT inside the loops
 
 
 
@@ -188,7 +191,9 @@ unique_spans = list(unique_spans.values())
 
 
 # GENERATION LOOP
-os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+os.makedirs(os.path.dirname(OUTPUT_FILE) or ".", exist_ok=True)
+print("Reading from:", os.path.abspath(INPUT_FILE))
+print("Writing to:  ", os.path.abspath(OUTPUT_FILE))
 
 iterations = TOTAL_GENS_PER_PREFIX // BATCH_SIZE
 
@@ -271,4 +276,3 @@ with open(OUTPUT_FILE, "w", encoding="utf-8") as f_out:
                 f_out.write(json.dumps(result, ensure_ascii=False) + "\n")
 
             f_out.flush()
-

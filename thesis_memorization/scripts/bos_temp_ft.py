@@ -9,7 +9,7 @@ material.
 
 
 Usage:
-    python bos_temp_ft.py --mode baseline --checkpoint 70 --checkpoint_dir ./checkpoints --output phase4_baseline.jsonl --max_tokens 256
+    python bos_temp_ft.py --mode baseline --seed 42 --checkpoint 70 --checkpoint_dir ./checkpoints --output phase4_baseline.jsonl --max_tokens 256
 """
 
 import json
@@ -23,6 +23,7 @@ from transformers import (
     AutoTokenizer,
     LogitsProcessor,
     LogitsProcessorList,
+    set_seed,
 )
 from peft import PeftModel
 
@@ -105,7 +106,10 @@ parser.add_argument(
     help="Number of new tokens to generate"
 )
 
+parser.add_argument("--seed", type=int, default=42)
+
 args = parser.parse_args()
+set_seed(args.seed)  # once, here. NOT inside the batch loop
 
 
 
@@ -142,11 +146,16 @@ model = PeftModel.from_pretrained(
 
 model.eval()
 
+# Report the number formats actually in use (base model vs LoRA adapter)
+print("Base model dtype:", next(base_model.parameters()).dtype)
+print("LoRA weight dtypes:", {str(p.dtype) for n, p in model.named_parameters() if "lora_" in n})
+
 
 os.makedirs(
-    os.path.dirname(OUTPUT_PATH),
+    os.path.dirname(OUTPUT_PATH) or ".",
     exist_ok=True
 )
+print("Writing to:", os.path.abspath(OUTPUT_PATH))
 
 
 

@@ -242,6 +242,6 @@ if __name__ == "__main__":
         t = s["total"]
         m = s["matched"]
         rate = (m / t * 100) if t > 0 else 0
-        print(f" 🔹 {strat:<15} : {m:>4}/{t:<4} ({rate:.2f}%) memorized")
+        print(f" {strat:<15} : {m:>4}/{t:<4} ({rate:.2f}%) memorized")
 
     print(f"\n List compiled here: {output_path}")

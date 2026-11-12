@@ -21,8 +21,7 @@ import os
 import argparse
 import torch
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessor, LogitsProcessorList
-
+from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessor, LogitsProcessorList, set_seed
 
 
 class TempDecayLogitsProcessor(LogitsProcessor):
@@ -81,6 +80,9 @@ parser.add_argument("--total_samples", type=int, default=10000)
 # Generations per batch
 parser.add_argument("--batch_size", type=int, default=16)
 
+parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--output", type=str, required=True)
+
 # Fixed grid of sequence lengths used across the ablation study
 parser.add_argument(
     "--max_tokens",
@@ -90,6 +92,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+set_seed(args.seed)  # once, here. NOT inside the batch loop
 
 MODEL = "meta-llama/Llama-3.1-8B"
 
@@ -108,13 +111,9 @@ model = AutoModelForCausalLM.from_pretrained(
 model.eval()
 
 
-output_dir = f"../data/ablation/{args.max_tokens}"
-os.makedirs(output_dir, exist_ok=True)
-
-output_path = os.path.join(
-    output_dir,
-    f"gen_{args.mode}.jsonl"
-)
+output_path = args.output
+os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+print("Writing to:", os.path.abspath(output_path))
 
 
 # Generation

@@ -22,8 +22,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # CONFIG
 
-# Source prefixes to condition generation on
-INPUT_PREFIXES = "../data/prefixes_conditional.jsonl"
 
 MODEL_NAME = "meta-llama/Llama-3.1-8B"
 
@@ -42,18 +40,19 @@ parser.add_argument(
     choices=[64, 128, 256, 384, 512]
 )
 
+parser.add_argument("--prefixes", type=str, required=True)
+parser.add_argument("--output", type=str, required=True)
+
 args = parser.parse_args()
 
 # Target total length (prefix + generated continuation) in tokens
 MAX_TOTAL_TOKENS = args.max_tokens
 
-OUTPUT_DIR = f"../data/ablation/{args.max_tokens}"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-OUTPUT_GEN = os.path.join(
-    OUTPUT_DIR,
-    "gen_conditional_results.jsonl"
-)
+INPUT_PREFIXES = args.prefixes
+OUTPUT_GEN = args.output
+os.makedirs(os.path.dirname(OUTPUT_GEN) or ".", exist_ok=True)
+print("Reading prefixes from:", os.path.abspath(INPUT_PREFIXES))
+print("Writing to:", os.path.abspath(OUTPUT_GEN))
 
 
 # LOAD MODEL + TOKENIZER

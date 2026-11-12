@@ -15,10 +15,11 @@ doesn't depend on the QLoRA merge step in the Phase 3 training script.
 
 
 Usage:
-    python conditional_ft.py --checkpoint 70 --checkpoint_dir ./checkpoints --output phase4_conditional.jsonl --max_tokens 256
+    python conditional_ft.py --checkpoint 70 --checkpoint_dir ./checkpoints --prefixes prefixes_conditional.jsonl --output phase4_conditional.jsonl --max_tokens 256
 """
 
 import json
+import os
 import argparse
 import torch
 from tqdm import tqdm
@@ -59,8 +60,8 @@ parser.add_argument(
 parser.add_argument(
     "--prefixes",
     type=str,
-    default="../data/prefixes_conditional.jsonl",
-    help="Prefix file"
+    required=True,
+    help="Prefix file (must be the same one used in Phase 1)"
 )
 
 parser.add_argument(
@@ -111,6 +112,10 @@ model = PeftModel.from_pretrained(
 
 model.eval()
 
+# Report the number formats actually in use (base model vs LoRA adapter)
+print("Base model dtype:", next(base_model.parameters()).dtype)
+print("LoRA weight dtypes:", {str(p.dtype) for n, p in model.named_parameters() if "lora_" in n})
+
 
 prefixes = []
 
@@ -122,6 +127,9 @@ with open(INPUT_PREFIXES, "r", encoding="utf-8") as f:
 prefixes = prefixes[:args.samples]
 
 print(f"Using {len(prefixes)} prefixes.")
+print("Reading prefixes from:", os.path.abspath(INPUT_PREFIXES))
+os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+print("Writing to:", os.path.abspath(args.output))
 print("Starting generation...")
 
 

@@ -18,10 +18,9 @@ import json
 import random
 from transformers import AutoTokenizer
 from tqdm import tqdm
+import argparse
+import os
 
-# --- CONFIG ---
-INPUT_PATH = "../data/redpajama_sample_balanced.jsonl"  # full auxiliary corpus to sample from
-OUTPUT_PATH = "../data/prefixes_conditional.jsonl"
 MODEL = "meta-llama/Llama-3.1-8B"
 
 SAMPLE_SIZE = 10000
@@ -31,7 +30,7 @@ MIN_TOKENS = 60   # minimum document length required before a prefix is extracte
 tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
 
 
-def get_conditional_samples():
+def get_conditional_samples(input_path, output_path):
     """Selects documents via reservoir sampling and extracts prefixes.
 
     Runs in two passes over the sampled pool (not the full corpus):
@@ -56,7 +55,7 @@ def get_conditional_samples():
     # -------------------------
     # PHASE 1: Reservoir Sampling
     # -------------------------
-    with open(INPUT_PATH, "r", encoding="utf-8") as f:
+    with open(input_path, "r", encoding="utf-8") as f:
         for i, line in enumerate(tqdm(f, desc="Sampling")):
 
             if len(reservoir) < SAMPLE_SIZE:
@@ -74,7 +73,7 @@ def get_conditional_samples():
     
 
     
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f_out:
+    with open(output_path, "w", encoding="utf-8") as f_out:
 
         for raw_line in tqdm(reservoir, desc="Processing"):
 
@@ -113,4 +112,14 @@ def get_conditional_samples():
 
 
 if __name__ == "__main__":
-    get_conditional_samples()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--input", type=str, required=True)
+    parser.add_argument("--output", type=str, required=True)
+    args = parser.parse_args()
+
+    random.seed(args.seed)  # before any random.* call
+    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+    print("Reading from:", os.path.abspath(args.input))
+    print("Writing to:  ", os.path.abspath(args.output))
+    get_conditional_samples(args.input, args.output)
